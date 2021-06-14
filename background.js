@@ -1,3 +1,8 @@
+/* https://stackoverflow.com/q/67806779 */
+function tabsGetById(id, callback) {
+	const cb = tab => (chrome.runtime.lastError) ? setTimeout(e => chrome.tabs.get(id, cb)) : callback(tab);
+	chrome.tabs.get(id, cb);
+}
 
 var selectedIndexes = {};
 
@@ -8,26 +13,27 @@ chrome.tabs.onCreated.addListener(function (tab) {
 
 // Store the currently selected tab index for each window.
 chrome.tabs.onSelectionChanged.addListener(function (tabId, selectInfo) {
-	chrome.tabs.get(tabId, function (tab) {
+	tabsGetById(tabId, function(tab) {
 		selectedIndexes[selectInfo.windowId] = tab.index;
 	});
 });
 
-// When a tab is removed, select the next tab (based on that selectedIndex for that window)
+// When a tab is removed, select the next tab (based on the selectedIndex for that window)
 chrome.tabs.onRemoved.addListener(function (tabId, removeInfo) {
-	if (!removeInfo.isWindowClosing) {
-		chrome.tabs.getAllInWindow(null, function (tabs) {
-			var windowId = tabs[0].windowId;
-			
-			if (!(windowId in selectedIndexes)) selectedIndex = 0;
-			else selectedIndex = selectedIndexes[windowId];
-			
-			if (tabs.length <= selectedIndex) {
-				chrome.tabs.update(tabs[tabs.length - 1].id, { selected : true });
+	if (removeInfo.isWindowClosing) return;
+
+	chrome.tabs.query({ windowId: removeInfo.windowId }, function(tabs) {
+		var selectedIndex = 0;
+		if (removeInfo.windowId in selectedIndexes)
+			selectedIndex = selectedIndexes[removeInfo.windowId];
+
+		if (tabs.length <= selectedIndex) {
+			if (typeof tabs[tabs.length-1] !== 'undefined') {
+				chrome.tabs.update(tabs[tabs.length-1].id, { selected: true });
 			}
-			else {
-				chrome.tabs.update(tabs[selectedIndex].id, { selected : true });
-			}
-		});
-	}
+		}
+		else {
+			chrome.tabs.update(tabs[selectedIndex].id, { selected: true });
+		}
+	});
 });
